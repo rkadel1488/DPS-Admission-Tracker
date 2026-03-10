@@ -170,7 +170,7 @@ export default function App() {
 
   const exportToExcel = (dataToExport) => {
     const headers = [
-      "Staff Code", "Student Name", "Parent/Guardian Name", "Date of Visit", 
+      "Staff Code", "Logged By", "Student Name", "Parent/Guardian Name", "Date of Visit", 
       "Address", "Contact No.", "Nationality", "Present School", 
       "Present Class", "Admission Sought (Class)", "Unanswered Questions", 
       "Feedback/Expectations", "Enquiry", "Registered", "Admitted", "Date Logged"
@@ -179,6 +179,7 @@ export default function App() {
       headers.join(","),
       ...dataToExport.map(item => [
         `"${item.staffCode || ''}"`,
+        `"${item.userName || ''}"`,
         `"${item.studentName || ''}"`,
         `"${item.parentName || ''}"`,
         `"${item.dateOfVisit || ''}"`,
@@ -329,7 +330,8 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
   const filtered = submissions.filter(s => 
     s.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     s.staffCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.parentName?.toLowerCase().includes(searchTerm.toLowerCase())
+    s.parentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.userName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -360,7 +362,7 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
         <div className="p-4 border-b bg-slate-50/50 flex items-center justify-between">
           <div className="max-w-md w-full relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="Search by student, parent, or staff..." className="w-full pl-10 pr-4 py-2 bg-white border rounded-lg outline-none text-xs" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Search by student, parent, or staff name..." className="w-full pl-10 pr-4 py-2 bg-white border rounded-lg outline-none text-xs" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -382,8 +384,9 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
                   <tr key={item.id} className="hover:bg-slate-50 transition text-sm">
                     {isAdminView && (
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{item.staffCode || 'N/A'}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-bold text-slate-800 leading-tight">{item.userName || 'Unknown'}</span>
+                          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{item.staffCode || 'N/A'}</span>
                         </div>
                       </td>
                     )}
