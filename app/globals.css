@@ -2,18 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensures that the CSS is correctly initialized for the Next.js build process.
+This file must be located at /app/globals.css to match the import in layout.jsx.
+*/
+
 :root {
-  --foreground-rgb: 15, 23, 42;
-  --background-start-rgb: 248, 250, 252;
-  --background-end-rgb: 255, 255, 255;
+--foreground-rgb: 15, 23, 42;
+--background-start-rgb: 248, 250, 252;
+--background-end-rgb: 255, 255, 255;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+color: rgb(var(--foreground-rgb));
+background: white;
+font-family: 'Inter', sans-serif;
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
 }
