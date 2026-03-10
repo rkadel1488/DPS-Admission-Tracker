@@ -18,7 +18,8 @@ import {
   KeyRound,
   ShieldAlert,
   Database,
-  Trash2
+  Trash2,
+  Edit2
 } from 'lucide-react';
 
 // Firebase Imports
@@ -37,11 +38,11 @@ import {
   addDoc, 
   onSnapshot,
   deleteDoc,
+  updateDoc,
   doc
 } from 'firebase/firestore';
 
 // --- Configuration ---
-// Safe environment variable check to prevent "process is not defined" error in browser previews
 const getEnv = (key) => {
   try {
     return typeof process !== 'undefined' ? process.env[key] : undefined;
@@ -76,6 +77,7 @@ export default function App() {
   const [view, setView] = useState('dashboard'); 
   const [submissions, setSubmissions] = useState([]);
   const [permissionError, setPermissionError] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -111,19 +113,32 @@ export default function App() {
 
   const handleLogout = async () => await signOut(auth);
 
-  const addSubmission = async (formData) => {
+  const saveSubmission = async (formData) => {
     if (!user) return;
     const staffCode = getStaffCodeFromEmail(user.email);
-    const newEntry = {
-      userId: user.uid,
-      staffCode: staffCode,
-      userName: user.displayName || staffCode,
-      timestamp: new Date().toISOString(),
-      ...formData
-    };
+    
     try {
-      const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'admissions');
-      await addDoc(colRef, newEntry);
+      if (editingRecord) {
+        // Update existing record
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'admissions', editingRecord.id);
+        await updateDoc(docRef, {
+          ...formData,
+          lastUpdatedBy: staffCode,
+          lastUpdatedTimestamp: new Date().toISOString()
+        });
+      } else {
+        // Add new record
+        const newEntry = {
+          userId: user.uid,
+          staffCode: staffCode,
+          userName: user.displayName || staffCode,
+          timestamp: new Date().toISOString(),
+          ...formData
+        };
+        const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'admissions');
+        await addDoc(colRef, newEntry);
+      }
+      setEditingRecord(null);
       setView(staffCode === 'admin01' ? 'master' : 'dashboard');
     } catch (err) {
       if (err.code === 'permission-denied') setPermissionError(true);
@@ -140,6 +155,17 @@ export default function App() {
       console.error("Delete error:", err);
       alert("Failed to delete the record. Please check permissions.");
     }
+  };
+
+  const handleEditInitiation = (record) => {
+    setEditingRecord(record);
+    setView('form');
+  };
+
+  const handleCancelForm = () => {
+    const staffCode = getStaffCodeFromEmail(user?.email);
+    setEditingRecord(null);
+    setView(staffCode === 'admin01' ? 'master' : 'dashboard');
   };
 
   const exportToExcel = (dataToExport) => {
@@ -212,18 +238,23 @@ export default function App() {
               <UserDashboard 
                 submissions={submissions.filter(s => s.userId === user.uid)} 
                 onExport={() => exportToExcel(submissions.filter(s => s.userId === user.uid))}
-                onAddNew={() => setView('form')}
+                onAddNew={() => { setEditingRecord(null); setView('form'); }}
               />
             )}
             {view === 'form' && (
-              <AdmissionForm onSubmit={addSubmission} onCancel={() => setView(isAdmin ? 'master' : 'dashboard')} />
+              <AdmissionForm 
+                onSubmit={saveSubmission} 
+                onCancel={handleCancelForm} 
+                initialData={editingRecord}
+              />
             )}
             {view === 'master' && isAdmin && (
               <MasterDashboard 
                 submissions={submissions} 
                 onExport={() => exportToExcel(submissions)}
-                onAddNew={() => setView('form')}
+                onAddNew={() => { setEditingRecord(null); setView('form'); }}
                 onDelete={handleDeleteRecord}
+                onEdit={handleEditInitiation}
               />
             )}
           </main>
@@ -293,7 +324,7 @@ function LoginScreen() {
   );
 }
 
-function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAdminView = false, onDelete }) {
+function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAdminView = false, onDelete, onEdit }) {
   const [searchTerm, setSearchTerm] = useState('');
   const filtered = submissions.filter(s => 
     s.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -374,13 +405,22 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
                     <td className="px-6 py-4 text-right text-slate-500">{item.dateOfVisit}</td>
                     {isAdminView && (
                       <td className="px-6 py-4 text-center">
-                        <button 
-                          onClick={() => onDelete(item.id)}
-                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete Record"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button 
+                            onClick={() => onEdit(item)}
+                            className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit Record"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => onDelete(item.id)}
+                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Record"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -409,22 +449,92 @@ function StatItem({ label, value, icon, color }) {
 }
 
 const UserDashboard = (props) => (<DashboardTable {...props} title="Your Entries" subtitle="View and manage the admissions you've logged" />);
-const MasterDashboard = (props) => (<DashboardTable {...props} title="Master Database" subtitle="Complete view of all staff admissions" isAdminView={true} onDelete={props.onDelete} />);
+const MasterDashboard = (props) => (<DashboardTable {...props} title="Master Database" subtitle="Complete view of all staff admissions" isAdminView={true} onDelete={props.onDelete} onEdit={props.onEdit} />);
 
-function AdmissionForm({ onSubmit, onCancel }) {
-  const [formData, setFormData] = useState({ teacherCode: '', studentName: '', parentName: '', dateOfVisit: new Date().toISOString().split('T')[0], address: '', contactNo: '', nationality: 'Nepali', presentSchool: '', presentClass: '', admissionSought: '', unansweredQuestions: '', parentsFeedback: '', isEnquiry: 'Yes', isRegistered: 'No', isAdmitted: 'No' });
+function AdmissionForm({ onSubmit, onCancel, initialData }) {
+  const [formData, setFormData] = useState({ 
+    teacherCode: '', studentName: '', parentName: '', dateOfVisit: new Date().toISOString().split('T')[0], 
+    address: '', contactNo: '', nationality: 'Nepali', presentSchool: '', presentClass: '', 
+    admissionSought: '', unansweredQuestions: '', parentsFeedback: '', isEnquiry: 'Yes', isRegistered: 'No', isAdmitted: 'No' 
+  });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const handleSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); await onSubmit(formData); setIsSubmitting(false); };
-  const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (checked ? 'Yes' : 'No') : value })); };
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        teacherCode: initialData.teacherCode || '',
+        studentName: initialData.studentName || '',
+        parentName: initialData.parentName || '',
+        dateOfVisit: initialData.dateOfVisit || new Date().toISOString().split('T')[0],
+        address: initialData.address || '',
+        contactNo: initialData.contactNo || '',
+        nationality: initialData.nationality || 'Nepali',
+        presentSchool: initialData.presentSchool || '',
+        presentClass: initialData.presentClass || '',
+        admissionSought: initialData.admissionSought || '',
+        unansweredQuestions: initialData.unansweredQuestions || '',
+        parentsFeedback: initialData.parentsFeedback || '',
+        isEnquiry: initialData.isEnquiry || 'Yes',
+        isRegistered: initialData.isRegistered || 'No',
+        isAdmitted: initialData.isAdmitted || 'No'
+      });
+    }
+  }, [initialData]);
+
+  const handleSubmit = async (e) => { 
+    e.preventDefault(); 
+    setIsSubmitting(true); 
+    await onSubmit(formData); 
+    setIsSubmitting(false); 
+  };
+  
+  const handleChange = (e) => { 
+    const { name, value, type, checked } = e.target; 
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (checked ? 'Yes' : 'No') : value })); 
+  };
+
   return (
     <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 mb-20">
-      <div className="bg-blue-950 p-6 text-white flex items-center justify-between"><div><h2 className="text-xl font-bold">New Admission Record</h2><p className="text-blue-300 text-xs mt-1">Fill in the student details to save to cloud</p></div><ClipboardList size={32} className="opacity-30" /></div>
+      <div className="bg-blue-950 p-6 text-white flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">{initialData ? 'Edit Admission Record' : 'New Admission Record'}</h2>
+          <p className="text-blue-300 text-xs mt-1">{initialData ? 'Update student details' : 'Fill in the student details to save to cloud'}</p>
+        </div>
+        <ClipboardList size={32} className="opacity-30" />
+      </div>
       <form onSubmit={handleSubmit} className="p-8 space-y-8 text-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><FormInput label="Teacher Code" name="teacherCode" value={formData.teacherCode} onChange={handleChange} required /><FormInput label="Date of Visit" name="dateOfVisit" value={formData.dateOfVisit} onChange={handleChange} type="date" required /><FormInput label="Contact No." name="contactNo" value={formData.contactNo} onChange={handleChange} required /><FormInput label="Student Name" name="studentName" value={formData.studentName} onChange={handleChange} required /><FormInput label="Parent Name" name="parentName" value={formData.parentName} onChange={handleChange} required /><FormInput label="Nationality" name="nationality" value={formData.nationality} onChange={handleChange} /><div className="md:col-span-3"><FormInput label="Residential Address" name="address" value={formData.address} onChange={handleChange} /></div></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t"><FormInput label="Present School" name="presentSchool" value={formData.presentSchool} onChange={handleChange} /><FormSelect label="Present Class" name="presentClass" value={formData.presentClass} onChange={handleChange} options={["Nursery", "LKG", "UKG", ...Array.from({length: 12}, (_, i) => `Grade ${i+1}`)]} /><FormSelect label="Seeking Admission In" name="admissionSought" value={formData.admissionSought} onChange={handleChange} required options={["Nursery", "LKG", "UKG", ...Array.from({length: 12}, (_, i) => `Grade ${i+1}`)]} /></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t"><FormTextArea label="Unresolved Questions" name="unansweredQuestions" value={formData.unansweredQuestions} onChange={handleChange} /><FormTextArea label="Parent Expectations" name="parentsFeedback" value={formData.parentsFeedback} onChange={handleChange} /></div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border"><StatusToggle label="Enquiry" name="isEnquiry" value={formData.isEnquiry} onChange={handleChange} /><StatusToggle label="Registered" name="isRegistered" value={formData.isRegistered} onChange={handleChange} /><StatusToggle label="Admitted" name="isAdmitted" value={formData.isAdmitted} onChange={handleChange} /></div>
-        <div className="flex gap-4 pt-4"><button type="button" onClick={onCancel} className="flex-1 py-4 border rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition">Cancel</button><button type="submit" disabled={isSubmitting} className="flex-1 py-4 bg-blue-700 text-white rounded-xl font-bold hover:bg-blue-800 transition flex items-center justify-center gap-2">{isSubmitting ? <Loader2 size={20} className="animate-spin" /> : 'Save Record'}</button></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <FormInput label="Teacher Code" name="teacherCode" value={formData.teacherCode} onChange={handleChange} required />
+          <FormInput label="Date of Visit" name="dateOfVisit" value={formData.dateOfVisit} onChange={handleChange} type="date" required />
+          <FormInput label="Contact No." name="contactNo" value={formData.contactNo} onChange={handleChange} required />
+          <FormInput label="Student Name" name="studentName" value={formData.studentName} onChange={handleChange} required />
+          <FormInput label="Parent Name" name="parentName" value={formData.parentName} onChange={handleChange} required />
+          <FormInput label="Nationality" name="nationality" value={formData.nationality} onChange={handleChange} />
+          <div className="md:col-span-3">
+            <FormInput label="Residential Address" name="address" value={formData.address} onChange={handleChange} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t">
+          <FormInput label="Present School" name="presentSchool" value={formData.presentSchool} onChange={handleChange} />
+          <FormSelect label="Present Class" name="presentClass" value={formData.presentClass} onChange={handleChange} options={["Nursery", "LKG", "UKG", ...Array.from({length: 12}, (_, i) => `Grade ${i+1}`)]} />
+          <FormSelect label="Seeking Admission In" name="admissionSought" value={formData.admissionSought} onChange={handleChange} required options={["Nursery", "LKG", "UKG", ...Array.from({length: 12}, (_, i) => `Grade ${i+1}`)]} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+          <FormTextArea label="Unresolved Questions" name="unansweredQuestions" value={formData.unansweredQuestions} onChange={handleChange} />
+          <FormTextArea label="Parent Expectations" name="parentsFeedback" value={formData.parentsFeedback} onChange={handleChange} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border">
+          <StatusToggle label="Enquiry" name="isEnquiry" value={formData.isEnquiry} onChange={handleChange} />
+          <StatusToggle label="Registered" name="isRegistered" value={formData.isRegistered} onChange={handleChange} />
+          <StatusToggle label="Admitted" name="isAdmitted" value={formData.isAdmitted} onChange={handleChange} />
+        </div>
+        <div className="flex gap-4 pt-4">
+          <button type="button" onClick={onCancel} className="flex-1 py-4 border rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition">Cancel</button>
+          <button type="submit" disabled={isSubmitting} className="flex-1 py-4 bg-blue-700 text-white rounded-xl font-bold hover:bg-blue-800 transition flex items-center justify-center gap-2">
+            {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : (initialData ? 'Update Record' : 'Save Record')}
+          </button>
+        </div>
       </form>
     </div>
   );
