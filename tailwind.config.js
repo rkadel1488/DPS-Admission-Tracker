@@ -7,7 +7,14 @@ module.exports = {
     "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        dps: {
+          blue: '#1e3a8a',
+          gold: '#b45309',
+        }
+      }
+    },
   },
   plugins: [],
-};
+}
