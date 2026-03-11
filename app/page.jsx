@@ -119,7 +119,6 @@ export default function App() {
     
     try {
       if (editingRecord) {
-        // Update existing record
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'admissions', editingRecord.id);
         await updateDoc(docRef, {
           ...formData,
@@ -127,7 +126,6 @@ export default function App() {
           lastUpdatedTimestamp: new Date().toISOString()
         });
       } else {
-        // Add new record
         const newEntry = {
           userId: user.uid,
           staffCode: staffCode,
@@ -240,6 +238,8 @@ export default function App() {
                 submissions={submissions.filter(s => s.userId === user.uid)} 
                 onExport={() => exportToExcel(submissions.filter(s => s.userId === user.uid))}
                 onAddNew={() => { setEditingRecord(null); setView('form'); }}
+                onEdit={handleEditInitiation}
+                onDelete={handleDeleteRecord}
               />
             )}
             {view === 'form' && (
@@ -375,7 +375,7 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4">Contact</th>
                 <th className="px-6 py-4 text-right">Visit Date</th>
-                {isAdminView && <th className="px-6 py-4 text-center">Actions</th>}
+                <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -406,9 +406,9 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
                     </td>
                     <td className="px-6 py-4 font-medium text-slate-600">{item.contactNo}</td>
                     <td className="px-6 py-4 text-right text-slate-500">{item.dateOfVisit}</td>
-                    {isAdminView && (
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {onEdit && (
                           <button 
                             onClick={() => onEdit(item)}
                             className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -416,6 +416,8 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
                           >
                             <Edit2 size={16} />
                           </button>
+                        )}
+                        {onDelete && (
                           <button 
                             onClick={() => onDelete(item.id)}
                             className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -423,14 +425,14 @@ function DashboardTable({ submissions, title, subtitle, onExport, onAddNew, isAd
                           >
                             <Trash2 size={16} />
                           </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={isAdminView ? 7 : 5} className="px-6 py-16 text-center text-slate-400 italic">No entries found.</td>
+                  <td colSpan={isAdminView ? 7 : 6} className="px-6 py-16 text-center text-slate-400 italic">No entries found.</td>
                 </tr>
               )}
             </tbody>
@@ -543,7 +545,7 @@ function AdmissionForm({ onSubmit, onCancel, initialData }) {
   );
 }
 
-const Navbar = ({ isAdmin, staffCode, onLogout, setView, currentView }) => (<nav className="bg-white border-b sticky top-0 z-50 shadow-sm"><div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center"><div className="flex items-center gap-3 cursor-pointer" onClick={() => setView(isAdmin ? 'master' : 'dashboard')}><img src={LOGO_URL} alt="Logo" className="h-10" /><span className="font-black text-blue-900 hidden sm:block">DPS TRACKER</span></div><div className="flex items-center gap-4"><button onClick={() => setView(isAdmin ? 'master' : 'dashboard')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition text-xs font-bold ${['dashboard', 'master'].includes(currentView) ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutDashboard size={16} /> Home</button><div className="h-8 w-px bg-slate-200 mx-1"></div><div className="text-right"><div className="text-[10px] font-bold text-slate-400 uppercase leading-none">Code</div><div className="text-sm font-black text-slate-800 leading-tight">{staffCode}</div></div><button onClick={onLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"><LogOut size={20} /></button></div></div></nav>);
+const Navbar = ({ isAdmin, staffCode, onLogout, setView, currentView }) => (<nav className="bg-white border-b sticky top-0 z-50 shadow-sm"><div className="max-w-7xl mx-auto px-4 h-16 flex justify-between items-center"><div className="flex items-center gap-3 cursor-pointer" onClick={() => setView(isAdmin ? 'master' : 'dashboard')}><img src={LOGO_URL} alt="Logo" className="h-10" /> <span className="font-black text-blue-900 hidden sm:block">DPS TRACKER</span></div><div className="flex items-center gap-4"><button onClick={() => setView(isAdmin ? 'master' : 'dashboard')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition text-xs font-bold ${['dashboard', 'master'].includes(currentView) ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}><LayoutDashboard size={16} /> Home</button><div className="h-8 w-px bg-slate-200 mx-1"></div><div className="text-right"><div className="text-[10px] font-bold text-slate-400 uppercase leading-none">Code</div><div className="text-sm font-black text-slate-800 leading-tight">{staffCode}</div></div><button onClick={onLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"><LogOut size={20} /></button></div></div></nav>);
 function FormInput({ label, required, ...props }) { return (<div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase ml-1">{label} {required && '*'}</label><input {...props} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-500/20" /></div>); }
 function FormSelect({ label, options, required, ...props }) { return (<div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase ml-1">{label} {required && '*'}</label><select {...props} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"><option value="">Select Class...</option>{options.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>); }
 function FormTextArea({ label, ...props }) { return (<div className="space-y-1"><label className="text-[10px] font-bold text-slate-500 uppercase ml-1">{label}</label><textarea {...props} rows="2" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none resize-none text-sm focus:ring-2 focus:ring-blue-500/20 transition-all" /></div>); }
