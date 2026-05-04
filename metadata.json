@@ -1,0 +1,6 @@
+{
+  "name": "GitHub Repo Editor",
+  "description": "Environment for editing an imported GitHub repository.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
